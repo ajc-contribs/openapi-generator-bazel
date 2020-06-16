@@ -1,8 +1,5 @@
 # Copyright 2019 OpenAPI-Generator-Bazel Contributors
 
-load("@rules_jvm_external//:defs.bzl", "maven_install")
-load("@maven//:compat.bzl", "compat_repositories")
-
 def _comma_separated_pairs(pairs):
     return ",".join([
         "{}={}".format(k, v)
@@ -165,11 +162,9 @@ _openapi_generator = rule(
             default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
             providers = [java_common.JavaRuntimeInfo],
         ),
-        "maven_space": attr.string(mandatory = True),
         "openapi_generator_cli": attr.label(
             cfg = "host",
-            default = Label("@{space}//:org_openapitools_openapi_generator_cli".format(
-                              space = ctx.attr.maven_space)),
+            default = Label("//external:openapi_tools_generator_bazel/dependency/openapi-generator-cli"),
             allow_single_file = True,
         ),
     },
