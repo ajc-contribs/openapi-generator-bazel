@@ -1,21 +1,25 @@
 # Copyright 2019 OpenAPI-Generator-Bazel Contributors
 
-def openapi_tools_generator_bazel_repositories(openapi_generator_cli_version = "4.1.3", sha256 = "234cbbc5ec9b56e4b585199ec387b5ad3aefb3eda9424c30d35c849dd5950d2f", prefix = "openapi_tools_generator_bazel"):
-    native.maven_jar(
-        name = "openapi_tools_generator_bazel_cli",
-        sha256 = sha256,
-        artifact = "org.openapitools:openapi-generator-cli:" + openapi_generator_cli_version,
-    )
-    native.bind(
-        name = prefix + "/dependency/openapi-generator-cli",
-        actual = "@" + prefix + "_cli//jar",
-    )
+load("@rules_jvm_external//:defs.bzl", "maven_install")
+load("@maven//:compat.bzl", "compat_repositories")
 
 def _comma_separated_pairs(pairs):
     return ",".join([
         "{}={}".format(k, v)
         for k, v in pairs.items()
     ])
+
+def _new_jar_command(ctx, gen_dir):
+    jar_cmd = "{jar} cMf {target} -C {srcs} .".format(
+            jar = "%s/bin/jar" % ctx.attr._jdk[java_common.JavaRuntimeInfo].java_home,
+            target = ctx.outputs.codegen.path,
+            srcs = gen_dir,
+        )
+
+    # fixme: by default, openapi-generator is rather verbose. this helps with that but can also mask useful error messages
+    # when it fails. look into log configuration options. it's a java app so perhaps just a log4j.properties or something
+    jar_cmd += " 1>/dev/null"
+    return jar_cmd
 
 def _new_generator_command(ctx, declared_dir, rjars):
     java_path = ctx.attr._jdk[java_common.JavaRuntimeInfo].java_executable_exec_path
@@ -71,9 +75,10 @@ def _new_generator_command(ctx, declared_dir, rjars):
             package = ctx.attr.engine,
         )
 
+    # ajc Don't add here, add it in jar command above
     # fixme: by default, openapi-generator is rather verbose. this helps with that but can also mask useful error messages
     # when it fails. look into log configuration options. it's a java app so perhaps just a log4j.properties or something
-    gen_cmd += " 1>/dev/null"
+    #gen_cmd += " 1>/dev/null"
     return gen_cmd
 
 def _impl(ctx):
@@ -90,19 +95,20 @@ def _impl(ctx):
     # TODO: Convert to run
     ctx.actions.run_shell(
         inputs = inputs,
-        command = "mkdir -p {gen_dir} && {generator_command}".format(
+        command = "mkdir -p {gen_dir} && {generator_command} && {jar_command}".format(
             gen_dir = declared_dir.path,
             generator_command = _new_generator_command(ctx, declared_dir, rjars),
+            jar_command = _new_jar_command(ctx, declared_dir.path),
         ),
-        outputs = [declared_dir],
+        outputs = [ctx.actions.declare_directory("%s" % (ctx.attr.name)), ctx.outputs.codegen],
         tools = ctx.files._jdk,
     )
 
     srcs = declared_dir.path
 
-    return DefaultInfo(files = depset([
-        declared_dir,
-    ]))
+    return struct(
+        codegen = ctx.outputs.codegen,
+    )
 
 # taken from rules_scala
 def _collect_jars(targets):
@@ -159,11 +165,16 @@ _openapi_generator = rule(
             default = Label("@bazel_tools//tools/jdk:current_java_runtime"),
             providers = [java_common.JavaRuntimeInfo],
         ),
+        "maven_space": attr.string(mandatory = True),
         "openapi_generator_cli": attr.label(
             cfg = "host",
-            default = Label("//external:openapi_tools_generator_bazel/dependency/openapi-generator-cli"),
+            default = Label("@{space}//:org_openapitools_openapi_generator_cli".format(
+                              space = ctx.attr.maven_space)),
             allow_single_file = True,
         ),
+    },
+    outputs = {
+        "codegen": "%{name}_codegen.srcjar",
     },
     implementation = _impl,
 )

@@ -1,3 +1,9 @@
+# FORK
+This fork is created for two changes
+1. Allow clients to download the CLI jar dependency externally and pass the namespace 
+   with which it can be reffered to.
+2. Create jar archive for the generated source files
+
 # OpenAPI Generator Bazel
 
 This repo was created to integrate the OpenAPI code generation CLI with Bazel.
@@ -20,13 +26,11 @@ you must do the following steps:
 
    load("@openapi_tools_generator_bazel//:defs.bzl", "openapi_tools_generator_bazel_repositories")
 
-   # You can provide any version of the CLI that has been uploaded to Maven
-   openapi_tools_generator_bazel_repositories(
-       openapi_generator_cli_version = "4.1.0",
-   )
    ```
 
-2. Create a BUILD.bazel file next to the .yaml file you wish to generate code from.
+2. Download openapi_generator_cli as maven artifact
+
+3. Create a BUILD.bazel file next to the .yaml file you wish to generate code from.
    The below example generates a go library within a generated directory named `petstore_go`
 
 ```
@@ -36,5 +40,6 @@ openapi_generator(
     name = "petstore_go",
     generator = "go",
     spec = "petstore.yaml",
+    maven_space = "maven",  # WORKSPACE name for the maven artifacts
 )
 ```
